@@ -28,6 +28,63 @@ function sendToBg(message) {
   });
 }
 
+// Self-contained scrape run in the page via chrome.scripting.executeScript.
+// Must not reference anything outside its own body (it is serialized).
+function scrapePostingInPage() {
+  const pick = (selectors) => {
+    for (const sel of selectors) {
+      const el = document.querySelector(sel);
+      if (el && el.textContent.trim()) return el.textContent.trim();
+    }
+    return "";
+  };
+
+  let title = pick([
+    ".job-details-jobs-unified-top-card__job-title",
+    ".jobs-unified-top-card__job-title",
+    ".t-24.job-details-jobs-unified-top-card__job-title",
+    "h1.t-24",
+    "h1"
+  ]);
+  if (!title) {
+    const m = document.title.replace(/\s*\|\s*LinkedIn.*/i, "").trim();
+    if (m) title = m;
+  }
+
+  let company = pick([
+    ".job-details-jobs-unified-top-card__company-name",
+    ".jobs-unified-top-card__company-name",
+    ".job-details-jobs-unified-top-card__company-name a",
+    'a[href*="/company/"]'
+  ]);
+  company = company.split("\n")[0].trim();
+
+  const location = pick([
+    ".job-details-jobs-unified-top-card__primary-description-container",
+    ".jobs-unified-top-card__primary-description",
+    ".jobs-unified-top-card__bullet"
+  ]);
+
+  let description = pick([
+    "#job-details",
+    ".jobs-description__content",
+    ".jobs-box__html-content",
+    ".jobs-description-content__text",
+    "article.jobs-description__container"
+  ]);
+  if (!description) {
+    // Fallback: largest visible text block on the page.
+    let best = "";
+    for (const el of document.querySelectorAll("article, section, div")) {
+      const t = (el.innerText || "").trim();
+      if (t.length > best.length && t.length < 20000) best = t;
+    }
+    description = best;
+  }
+
+  return { title, company, location, description, url: window.location.href };
+}
+
 function renderLinks(ulId, items) {
   const ul = $(ulId);
   ul.innerHTML = "";
@@ -134,19 +191,39 @@ async function main() {
   });
 
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  if (!tab || !/^https:\/\/www\.linkedin\.com\/jobs\//.test(tab.url || "")) {
+  if (!tab || !/^https:\/\/([\w-]+\.)?linkedin\.com\//.test(tab.url || "")) {
     setStatus("Open a LinkedIn job posting, then click the extension.", true);
     return;
   }
 
   setStatus("Reading posting…");
-  const scraped = await sendToTab(tab.id, { type: "SCRAPE_POSTING" });
-  if (!scraped?.ok || !scraped.posting?.title) {
-    setStatus("Couldn't read this page. Scroll the description into view and retry.", true);
-    return;
+
+  // Primary: inject the scrape on demand (works regardless of when the
+  // extension was loaded). Fallback: message the declared content script.
+  let posting = null;
+  try {
+    const [inj] = await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      func: scrapePostingInPage
+    });
+    if (inj?.result?.title || inj?.result?.description) posting = inj.result;
+  } catch (e) {
+    // executeScript can fail on restricted pages; fall through to messaging.
+  }
+  if (!posting) {
+    const scraped = await sendToTab(tab.id, { type: "SCRAPE_POSTING" });
+    if (scraped?.ok && scraped.posting) posting = scraped.posting;
   }
 
-  const posting = scraped.posting;
+  if (!posting || !(posting.title || posting.description)) {
+    setStatus(
+      "Couldn't read this page. Make sure a job posting is open (URL has /jobs/view/…), " +
+        "scroll the description into view, then reopen the extension. If you just installed it, reload the LinkedIn tab first.",
+      true
+    );
+    return;
+  }
+  if (!posting.title) posting.title = posting.company || "this role";
   $("job-title").textContent = posting.title;
   $("job-company").textContent = [posting.company, posting.location].filter(Boolean).join(" · ");
 
