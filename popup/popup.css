@@ -1,0 +1,50 @@
+:root {
+  --bg: #ffffff;
+  --fg: #1d2226;
+  --muted: #6b7278;
+  --border: #d9dce0;
+  --accent: #0a66c2;
+  --accent-bg: #eaf3fb;
+}
+* { box-sizing: border-box; }
+body {
+  width: 360px;
+  margin: 0;
+  font: 13px/1.4 -apple-system, "Segoe UI", Roboto, sans-serif;
+  color: var(--fg);
+  background: var(--bg);
+  padding: 12px;
+}
+header { display: flex; align-items: center; justify-content: space-between; }
+h1 { font-size: 15px; margin: 0; }
+h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 14px 0 6px; }
+#settings-link { text-decoration: none; font-size: 16px; color: var(--muted); }
+.status { color: var(--muted); padding: 8px 0; }
+.status.error { color: #b42318; }
+.meta { margin: 6px 0 10px; }
+.job-title { font-weight: 600; font-size: 14px; }
+.muted { color: var(--muted); }
+.field-label { display: block; font-weight: 600; margin-bottom: 4px; }
+.badge { font-weight: 400; font-size: 11px; color: var(--accent); background: var(--accent-bg); padding: 1px 6px; border-radius: 8px; margin-left: 4px; }
+textarea {
+  width: 100%; resize: vertical; font-family: ui-monospace, Menlo, monospace;
+  font-size: 12px; padding: 6px; border: 1px solid var(--border); border-radius: 6px;
+}
+.row { display: flex; gap: 6px; margin: 6px 0; }
+button {
+  cursor: pointer; border-radius: 16px; border: 1px solid var(--accent);
+  background: var(--accent); color: #fff; padding: 4px 12px; font-size: 12px;
+}
+button.secondary { background: #fff; color: var(--accent); }
+.links { list-style: none; margin: 0; padding: 0; }
+.links li { margin: 4px 0; }
+.links a {
+  display: block; padding: 8px 10px; border: 1px solid var(--border);
+  border-radius: 6px; text-decoration: none; color: var(--accent);
+}
+.links a:hover { background: var(--accent-bg); }
+.results { list-style: none; margin: 6px 0 0; padding: 0; }
+.results li { padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; margin: 4px 0; }
+.results .name { font-weight: 600; }
+.results .role { color: var(--muted); font-size: 12px; }
+.results a { color: var(--accent); font-size: 12px; text-decoration: none; }

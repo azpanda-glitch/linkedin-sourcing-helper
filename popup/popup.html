@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <header>
+    <h1>Sourcing Helper</h1>
+    <a id="settings-link" href="#" title="Settings">⚙︎</a>
+  </header>
+
+  <div id="status" class="status"></div>
+
+  <section id="posting" hidden>
+    <div class="meta">
+      <div id="job-title" class="job-title"></div>
+      <div id="job-company" class="muted"></div>
+    </div>
+
+    <label class="field-label" for="boolean">Boolean query <span id="src-badge" class="badge"></span></label>
+    <textarea id="boolean" rows="3" spellcheck="false"></textarea>
+    <div class="row">
+      <button id="rebuild" class="secondary">Rebuild links</button>
+      <button id="copy-bool" class="secondary">Copy</button>
+    </div>
+
+    <h2>Sourcer — find people</h2>
+    <ul id="sourcer-links" class="links"></ul>
+
+    <h2>Hiring manager — related people & posts</h2>
+    <ul id="hm-links" class="links"></ul>
+
+    <h2>Live people search (People Data Labs)</h2>
+    <div class="row">
+      <button id="find-recruiters" class="secondary">Find recruiters / hiring mgrs</button>
+      <button id="find-peers" class="secondary">Find people in this role</button>
+    </div>
+    <div id="pdl-status" class="muted"></div>
+    <ul id="pdl-results" class="results"></ul>
+  </section>
+
+  <script type="module" src="popup.js"></script>
+</body>
+</html>
