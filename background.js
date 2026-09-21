@@ -73,9 +73,14 @@ const RECRUITER_TITLE_TERMS = [
   "hiring manager", "talent partner", "sourcer", "people operations"
 ];
 
+// At tech companies the people who own intern/new-grad pipelines are often
+// titled "technical sourcer" / "engineering recruiter", not "university".
 const EARLY_CAREER_RECRUITER_TERMS = [
-  "university recruiter", "early career recruiter", "campus recruiter",
-  "early talent", "university talent acquisition", "early careers"
+  "university recruiter", "university recruiting", "campus recruiter",
+  "campus recruiting", "early career recruiter", "early careers",
+  "early talent", "emerging talent", "student programs", "intern program",
+  "new grad recruiter", "technical recruiter", "technical sourcer",
+  "engineering recruiter"
 ];
 
 function pdlQuery({ company, titles, location, mode, earlyCareer }) {

@@ -108,22 +108,23 @@ function renderFromExt(ext) {
   renderLinks("hm-links", q.hiringManager);
 }
 
-// When the user edits the Boolean text, rebuild links using the edited string
-// as the keyword core while keeping location/company from extraction.
-function rebuildFromEditedBoolean(ext) {
+// Rebuild after the user edits the Company field or the Boolean box.
+// The company change re-derives every query; the edited Boolean is applied only
+// to the two generic keyword searches, so recruiter/manager searches keep their
+// own purpose-built term lists.
+function rebuild(ext) {
+  ext.company = $("company").value.trim();
   const edited = $("boolean").value.trim();
   const q = buildQueries(ext);
-  const patch = (arr) =>
-    arr.map((item) => ({
-      label: item.label,
-      url: item.url.includes("google.com")
-        ? `https://www.google.com/search?q=${encodeURIComponent(
-            item.url.includes("linkedin.com/posts") ? `site:linkedin.com/posts ${edited}` : `site:linkedin.com/in ${edited}`
-          )}`
-        : item.url.replace(/keywords=[^&]*/, `keywords=${encodeURIComponent(edited)}`)
-    }));
-  renderLinks("sourcer-links", patch(q.sourcer));
-  renderLinks("hm-links", patch(q.hiringManager));
+
+  const applyEdited = (items) =>
+    items.map((item) => {
+      if (!/^LinkedIn people search$/.test(item.label)) return item;
+      return { label: item.label, url: item.url.replace(/keywords=[^&]*/, `keywords=${encodeURIComponent(edited)}`) };
+    });
+
+  renderLinks("sourcer-links", applyEdited(q.sourcer));
+  renderLinks("hm-links", q.hiringManager);
 }
 
 function renderPeople(people) {
@@ -158,6 +159,8 @@ function wirePdl(ext) {
   const run = async (mode, label) => {
     const status = $("pdl-status");
     $("pdl-results").innerHTML = "";
+    // Honor a company typed into the field even if nothing was scraped.
+    ext.company = $("company").value.trim() || ext.company;
     if (!ext.company) {
       status.textContent = "No company detected on this posting.";
       return;
@@ -256,9 +259,11 @@ async function main() {
 
   if (!ext) ext = extractLocal(posting);
 
-  // Carry the original posting title so "role name + hiring" and early-career
-  // detection anchor on the real title, not a derived one.
+  // Carry the original posting title and description so "role + hiring" and
+  // early-career detection anchor on the real text, not a derived title.
   ext.roleName = posting.title;
+  ext.description = posting.description || "";
+  if (!ext.company) ext.company = posting.company || "";
 
   $("src-badge").textContent = ext.source;
   if (ext.source === "local" && extractionMode !== "claude") setStatus("");
@@ -269,7 +274,9 @@ async function main() {
 
   wirePdl(ext);
 
-  $("rebuild").addEventListener("click", () => rebuildFromEditedBoolean(ext));
+  $("company").value = ext.company || "";
+  $("company").addEventListener("change", () => rebuild(ext));
+  $("rebuild").addEventListener("click", () => rebuild(ext));
   $("copy-bool").addEventListener("click", async () => {
     await navigator.clipboard.writeText($("boolean").value);
     $("copy-bool").textContent = "Copied";

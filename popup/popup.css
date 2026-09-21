@@ -26,6 +26,10 @@ h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: v
 .muted { color: var(--muted); }
 .field-label { display: block; font-weight: 600; margin-bottom: 4px; }
 .badge { font-weight: 400; font-size: 11px; color: var(--accent); background: var(--accent-bg); padding: 1px 6px; border-radius: 8px; margin-left: 4px; }
+input[type="text"] {
+  width: 100%; padding: 6px; border: 1px solid var(--border); border-radius: 6px;
+  font-size: 12px; margin-bottom: 8px;
+}
 textarea {
   width: 100%; resize: vertical; font-family: ui-monospace, Menlo, monospace;
   font-size: 12px; padding: 6px; border: 1px solid var(--border); border-radius: 6px;
