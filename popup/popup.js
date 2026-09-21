@@ -1,5 +1,5 @@
 import { extractLocal } from "../lib/extract.js";
-import { buildQueries } from "../lib/query.js";
+import { buildQueries, isEarlyCareer } from "../lib/query.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -165,7 +165,13 @@ function wirePdl(ext) {
     status.textContent = `Searching ${label} at ${ext.company}…`;
     const res = await sendToBg({
       type: "PDL_SEARCH",
-      params: { company: ext.company, titles: ext.titles, location: ext.location, mode }
+      params: {
+        company: ext.company,
+        titles: ext.titles,
+        location: ext.location,
+        mode,
+        earlyCareer: isEarlyCareer(ext)
+      }
     });
     if (!res?.ok) {
       const hints = {
@@ -180,7 +186,10 @@ function wirePdl(ext) {
     renderPeople(res.people);
   };
 
-  $("find-recruiters").addEventListener("click", () => run("recruiters", "recruiters / hiring managers"));
+  const early = isEarlyCareer(ext);
+  const recruiterLabel = early ? "university / early-career recruiters" : "recruiters / hiring managers";
+  if (early) $("find-recruiters").textContent = "Find university recruiters";
+  $("find-recruiters").addEventListener("click", () => run("recruiters", recruiterLabel));
   $("find-peers").addEventListener("click", () => run("peers", "people in this role"));
 }
 
@@ -246,6 +255,10 @@ async function main() {
   }
 
   if (!ext) ext = extractLocal(posting);
+
+  // Carry the original posting title so "role name + hiring" and early-career
+  // detection anchor on the real title, not a derived one.
+  ext.roleName = posting.title;
 
   $("src-badge").textContent = ext.source;
   if (ext.source === "local" && extractionMode !== "claude") setStatus("");

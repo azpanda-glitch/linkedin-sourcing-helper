@@ -73,10 +73,16 @@ const RECRUITER_TITLE_TERMS = [
   "hiring manager", "talent partner", "sourcer", "people operations"
 ];
 
-function pdlQuery({ company, titles, location, mode }) {
+const EARLY_CAREER_RECRUITER_TERMS = [
+  "university recruiter", "early career recruiter", "campus recruiter",
+  "early talent", "university talent acquisition", "early careers"
+];
+
+function pdlQuery({ company, titles, location, mode, earlyCareer }) {
   const should = [];
   if (mode === "recruiters") {
-    for (const t of RECRUITER_TITLE_TERMS) should.push({ match: { job_title: t } });
+    const terms = earlyCareer ? EARLY_CAREER_RECRUITER_TERMS : RECRUITER_TITLE_TERMS;
+    for (const t of terms) should.push({ match: { job_title: t } });
     should.push({ term: { job_title_role: "human_resources" } });
   } else {
     for (const t of (titles || []).slice(0, 6)) should.push({ match: { job_title: t } });
