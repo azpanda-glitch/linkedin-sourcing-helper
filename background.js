@@ -93,8 +93,9 @@ function pdlQuery({ company, titles, location, mode, earlyCareer }) {
     for (const t of (titles || []).slice(0, 6)) should.push({ match: { job_title: t } });
   }
 
+  // Company only. A location filter here excluded too many valid people
+  // (remote recruiters, HQ-based staff) for the value it added.
   const must = [{ match: { job_company_name: company } }];
-  if (location) must.push({ match: { location_name: location } });
 
   return {
     bool: {

@@ -177,8 +177,8 @@ function renderLinks(ulId, items) {
 function renderFromExt(ext) {
   const q = buildQueries(ext);
   $("boolean").value = q.boolean;
-  renderLinks("sourcer-links", q.sourcer);
   renderLinks("hm-links", q.hiringManager);
+  renderLinks("sourcer-links", q.sourcer);
 }
 
 // Rebuild after the user edits the Company field or the Boolean box.
@@ -190,14 +190,19 @@ function rebuild(ext) {
   const edited = $("boolean").value.trim();
   const q = buildQueries(ext);
 
+  // The edited Boolean drives the two primary hiring-manager searches; the
+  // recruiter/manager searches keep their own purpose-built term lists.
   const applyEdited = (items) =>
     items.map((item) => {
-      if (!/^LinkedIn people search$/.test(item.label)) return item;
-      return { label: item.label, url: item.url.replace(/keywords=[^&]*/, `keywords=${encodeURIComponent(edited)}`) };
+      if (!/^Hiring manager posts/.test(item.label)) return item;
+      return {
+        label: item.label,
+        url: item.url.replace(/keywords=[^&]*/, `keywords=${encodeURIComponent(edited)}`)
+      };
     });
 
-  renderLinks("sourcer-links", applyEdited(q.sourcer));
-  renderLinks("hm-links", q.hiringManager);
+  renderLinks("hm-links", applyEdited(q.hiringManager));
+  renderLinks("sourcer-links", q.sourcer);
 }
 
 function renderPeople(people) {
@@ -244,7 +249,6 @@ function wirePdl(ext) {
       params: {
         company: ext.company,
         titles: ext.titles,
-        location: ext.location,
         mode,
         earlyCareer: isEarlyCareer(ext)
       }
