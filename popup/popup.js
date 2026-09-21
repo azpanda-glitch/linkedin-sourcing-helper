@@ -38,32 +38,96 @@ function scrapePostingInPage() {
     }
     return "";
   };
+  const meta = (prop) =>
+    document.querySelector(`meta[property="${prop}"], meta[name="${prop}"]`)?.content?.trim() || "";
+  const clean = (s) => String(s || "").replace(/\s+/g, " ").trim();
 
-  let title = pick([
+  // --- Source 1: JSON-LD JobPosting (most reliable; survives CSS churn) -----
+  let ld = {};
+  for (const node of document.querySelectorAll('script[type="application/ld+json"]')) {
+    try {
+      const parsed = JSON.parse(node.textContent);
+      const items = Array.isArray(parsed) ? parsed : [parsed, ...(parsed["@graph"] || [])];
+      for (const it of items) {
+        if (it && /JobPosting/i.test(it["@type"] || "")) {
+          const loc = it.jobLocation?.address || it.jobLocation?.[0]?.address || {};
+          ld = {
+            title: clean(it.title),
+            company: clean(it.hiringOrganization?.name),
+            location: clean(
+              [loc.addressLocality, loc.addressRegion, loc.addressCountry]
+                .filter((x) => typeof x === "string")
+                .join(", ")
+            ),
+            // description is HTML — strip tags for text extraction
+            description: clean(
+              String(it.description || "").replace(/<[^>]+>/g, " ").replace(/&[a-z]+;/gi, " ")
+            )
+          };
+          break;
+        }
+      }
+    } catch (e) {
+      /* malformed JSON-LD block — ignore and try the next source */
+    }
+    if (ld.company) break;
+  }
+
+  // --- Source 2: og:title / document.title -> "<Company> hiring <Role> in <Loc>"
+  let ogCompany = "";
+  let ogTitle = "";
+  let ogLocation = "";
+  for (const raw of [meta("og:title"), document.title]) {
+    const s = clean(raw).replace(/\s*\|\s*LinkedIn.*$/i, "");
+    const m = s.match(/^(.+?)\s+hiring\s+(.+?)(?:\s+in\s+(.+))?$/i);
+    if (m) {
+      ogCompany = ogCompany || clean(m[1]);
+      ogTitle = ogTitle || clean(m[2]);
+      ogLocation = ogLocation || clean(m[3] || "");
+      break;
+    }
+  }
+
+  // --- Source 3: URL slug -> /jobs/view/<role>-at-<company>-<id> ------------
+  let slugCompany = "";
+  const slug = window.location.pathname.match(/\/jobs\/view\/([^/?]+)/)?.[1] || "";
+  if (slug) {
+    const m = slug.replace(/-\d+$/, "").split("-at-");
+    if (m.length > 1) {
+      slugCompany = m[m.length - 1].replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+    }
+  }
+
+  // --- Source 4: DOM selectors (current LinkedIn markup) -------------------
+  const domTitle = pick([
     ".job-details-jobs-unified-top-card__job-title",
     ".jobs-unified-top-card__job-title",
     ".t-24.job-details-jobs-unified-top-card__job-title",
     "h1.t-24",
     "h1"
   ]);
-  if (!title) {
-    const m = document.title.replace(/\s*\|\s*LinkedIn.*/i, "").trim();
-    if (m) title = m;
-  }
 
-  let company = pick([
+  let domCompany = pick([
     ".job-details-jobs-unified-top-card__company-name",
     ".jobs-unified-top-card__company-name",
     ".job-details-jobs-unified-top-card__company-name a",
+    ".topcard__org-name-link",
     'a[href*="/company/"]'
   ]);
-  company = company.split("\n")[0].trim();
+  domCompany = clean(domCompany.split("\n")[0]);
 
-  const location = pick([
+  const domLocation = pick([
     ".job-details-jobs-unified-top-card__primary-description-container",
     ".jobs-unified-top-card__primary-description",
+    ".topcard__flavor--bullet",
     ".jobs-unified-top-card__bullet"
   ]);
+
+  // Merge with precedence: structured data > og:title > DOM > URL slug.
+  const title = ld.title || ogTitle || domTitle || "";
+  const company = ld.company || ogCompany || domCompany || slugCompany || "";
+  // Trim trailing bullets/dots LinkedIn appends to the location line.
+  const jobLocation = clean((ld.location || ogLocation || domLocation || "").split("·")[0]);
 
   let description = pick([
     "#job-details",
@@ -72,6 +136,7 @@ function scrapePostingInPage() {
     ".jobs-description-content__text",
     "article.jobs-description__container"
   ]);
+  if (!description) description = ld.description || "";
   if (!description) {
     // Fallback: largest visible text block on the page.
     let best = "";
@@ -82,7 +147,15 @@ function scrapePostingInPage() {
     description = best;
   }
 
-  return { title, company, location, description, url: window.location.href };
+  return {
+    title,
+    company,
+    location: jobLocation,
+    description,
+    url: window.location.href,
+    // which source won — surfaced in the popup so failures are diagnosable
+    companySource: ld.company ? "json-ld" : ogCompany ? "og:title" : domCompany ? "dom" : slugCompany ? "url" : "none"
+  };
 }
 
 function renderLinks(ulId, items) {
@@ -275,6 +348,10 @@ async function main() {
   wirePdl(ext);
 
   $("company").value = ext.company || "";
+  if (!ext.company) {
+    $("company").placeholder = "Not detected — type the company name";
+    setStatus("Company not detected on this page — enter it above to enable company-scoped searches.", true);
+  }
   $("company").addEventListener("change", () => rebuild(ext));
   $("rebuild").addEventListener("click", () => rebuild(ext));
   $("copy-bool").addEventListener("click", async () => {
