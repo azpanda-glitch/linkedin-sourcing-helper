@@ -67,6 +67,45 @@ backfill the rest.
 - `popup/` — UI: editable Boolean box + grouped search links.
 - `options/` — settings (mode, API key, model).
 
+## The two rules that decide whether a search returns anything
+
+### 1. Search the head noun, not the req title
+
+A req title is a stack of qualifiers on one head noun, and the qualifiers are
+exactly the words nobody else writes:
+
+| Posting title | Searched as |
+|---|---|
+| Consumer Insight Analyst | `"analyst"` |
+| Sr. Manager, Product Marketing | `"manager"` |
+| Summer 2027 Intern - Marketing-Earned Media Specialist | `"specialist"` |
+| Machine Learning Intern | `"machine learning"` |
+| 2026 Client Relations Co-op | `"client relations"` |
+
+`headNoun()` matches a known occupation noun rightmost-first (so "Engineering
+Manager" gives `manager`, not `engineering`), and falls back to position when the
+title contains no occupation noun — keeping the whole phrase when it's short
+enough that splitting it would destroy the meaning. Add to `HEAD_NOUN_WORDS` to
+improve it. The full phrase is still offered as a *narrower* second link.
+
+### 2. LinkedIn terms are joined with `+`
+
+The global search bar gets `plusString()` output — each required term quoted,
+joined by `" + "`:
+
+```
+"analyst" + "hiring" + "State Farm"
+```
+
+Note: LinkedIn's own help pages say the legacy `+` / `-` operators were retired,
+so this is asserted against the docs. It is here because `AND` chains
+demonstrably returned nothing. Everything routes through `LINKEDIN_JOINER`, so if
+`+` also comes up empty, change that one constant.
+
+Company **People tab** links are the exception and stay as plain unquoted
+keywords: that tab's company scope comes from the URL, so quoting and `+` would
+only narrow a search that is already correctly scoped.
+
 ## The Boolean operator budget (important)
 
 LinkedIn [caps how many Boolean operators a free account may use in one

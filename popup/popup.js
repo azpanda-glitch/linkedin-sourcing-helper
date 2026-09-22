@@ -210,7 +210,18 @@ function renderLinks(ulId, items) {
 // than silently producing a nonsense query.
 function renderDetection(q, ext) {
   const bits = [];
-  bits.push(q.rolePhrase ? `role: “${q.rolePhrase}”` : "role: not detected — type it above");
+  // The head noun is what actually gets searched, so show it next to the phrase
+  // it was reduced from — that reduction is the difference between a search that
+  // returns people and one that returns nothing.
+  if (q.rolePhrase) {
+    bits.push(
+      q.headNoun && q.headNoun !== q.rolePhrase.toLowerCase()
+        ? `role: “${q.rolePhrase}” → searched as “${q.headNoun}”`
+        : `role: “${q.rolePhrase}”`
+    );
+  } else {
+    bits.push("role: not detected — type it above");
+  }
   if (ext.description) {
     // What was actually read out of the body, so "it didn't read the posting" is
     // answerable at a glance instead of being a guess.
