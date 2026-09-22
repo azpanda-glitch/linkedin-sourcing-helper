@@ -99,19 +99,25 @@ function scrapePostingInPage() {
   }
 
   // --- Source 4: DOM selectors (current LinkedIn markup) -------------------
+  // Title selectors are scoped to the job top card. A bare "h1" is deliberately
+  // NOT a fallback: on /jobs/collections and /jobs/search pages the page h1 is
+  // the company or a generic heading, which silently became the "role".
   const domTitle = pick([
+    ".job-details-jobs-unified-top-card__job-title h1",
     ".job-details-jobs-unified-top-card__job-title",
     ".jobs-unified-top-card__job-title",
-    ".t-24.job-details-jobs-unified-top-card__job-title",
-    "h1.t-24",
-    "h1"
+    ".jobs-details-top-card__job-title",
+    ".topcard__title",
+    ".jobs-search__job-details h1",
+    "h1.t-24"
   ]);
 
   let domCompany = pick([
+    ".job-details-jobs-unified-top-card__company-name a",
     ".job-details-jobs-unified-top-card__company-name",
     ".jobs-unified-top-card__company-name",
-    ".job-details-jobs-unified-top-card__company-name a",
     ".topcard__org-name-link",
+    ".jobs-search__job-details a[href*='/company/']",
     'a[href*="/company/"]'
   ]);
   domCompany = clean(domCompany.split("\n")[0]);
@@ -124,18 +130,31 @@ function scrapePostingInPage() {
   ]);
 
   // Merge with precedence: structured data > og:title > DOM > URL slug.
-  const title = ld.title || ogTitle || domTitle || "";
+  let title = ld.title || ogTitle || domTitle || "";
   const company = ld.company || ogCompany || domCompany || slugCompany || "";
+  // A "title" equal to the company is a failed read, not a role. Reporting it
+  // empty makes the popup ask for it instead of searching for the company as
+  // though it were a job title.
+  if (company && title.toLowerCase() === company.toLowerCase()) title = "";
   // Trim trailing bullets/dots LinkedIn appends to the location line.
   const jobLocation = clean((ld.location || ogLocation || domLocation || "").split("·")[0]);
 
-  let description = pick([
+  // innerText, not textContent: textContent concatenates across element
+  // boundaries, so "<strong>Reports to:</strong><span>Director of Analytics</span>"
+  // collapses to "Reports to:Director of Analytics" and the reporting-line
+  // patterns never match. innerText keeps the block break.
+  let description = "";
+  for (const sel of [
     "#job-details",
     ".jobs-description__content",
     ".jobs-box__html-content",
     ".jobs-description-content__text",
     "article.jobs-description__container"
-  ]);
+  ]) {
+    const el = document.querySelector(sel);
+    const text = clean(el?.innerText || el?.textContent || "");
+    if (text.length > description.length) description = text;
+  }
   if (!description) description = ld.description || "";
   if (!description) {
     // Fallback: largest visible text block on the page.
@@ -173,28 +192,48 @@ function renderLinks(ulId, items) {
   }
 }
 
+// Report what the scrape actually understood, so a bad read is visible rather
+// than silently producing a nonsense query.
+function renderDetection(q, ext) {
+  const bits = [];
+  bits.push(q.rolePhrase ? `role: “${q.rolePhrase}”` : "role: not detected — type it above");
+  if (ext.description) {
+    bits.push(
+      q.reportsTo
+        ? `reports to: ${q.reportsTo}`
+        : "no reporting line stated — showing entry-level peers instead"
+    );
+  } else {
+    bits.push("description not read — scroll it into view and reopen");
+  }
+  $("detect").textContent = bits.join(" · ");
+}
+
 // Rebuild the persona link lists from whatever is in the Boolean box.
 function renderFromExt(ext) {
   const q = buildQueries(ext);
   $("boolean").value = q.boolean;
   renderLinks("hm-links", q.hiringManager);
   renderLinks("sourcer-links", q.sourcer);
+  renderDetection(q, ext);
 }
 
-// Rebuild after the user edits the Company field or the Boolean box.
-// The company change re-derives every query; the edited Boolean is applied only
-// to the two generic keyword searches, so recruiter/manager searches keep their
-// own purpose-built term lists.
+// Rebuild after the user edits the Role/Company fields or the Boolean box.
+// Those changes re-derive every query; the edited Boolean is applied only to the
+// generic keyword searches, so recruiter/manager searches keep their own
+// purpose-built term lists.
 function rebuild(ext) {
   ext.company = $("company").value.trim();
+  ext.roleName = $("role").value.trim();
   const edited = $("boolean").value.trim();
   const q = buildQueries(ext);
+  renderDetection(q, ext);
 
-  // The edited Boolean drives the two primary hiring-manager searches; the
-  // recruiter/manager searches keep their own purpose-built term lists.
+  // The edited Boolean drives only the links flagged `editable` by the query
+  // builder; every other search keeps its own purpose-built term list.
   const applyEdited = (items) =>
     items.map((item) => {
-      if (!/^Hiring manager posts/.test(item.label)) return item;
+      if (!item.editable || !edited) return item;
       return {
         label: item.label,
         url: item.url.replace(/keywords=[^&]*/, `keywords=${encodeURIComponent(edited)}`)
@@ -312,8 +351,9 @@ async function main() {
     );
     return;
   }
-  if (!posting.title) posting.title = posting.company || "this role";
-  $("job-title").textContent = posting.title;
+  // Never substitute a placeholder for the title: "this role" and the company
+  // name both end up quoted inside the Boolean as if they were the job title.
+  $("job-title").textContent = posting.title || "(role not detected)";
   $("job-company").textContent = [posting.company, posting.location].filter(Boolean).join(" · ");
 
   const { extractionMode } = await chrome.storage.sync.get(["extractionMode"]);
@@ -338,7 +378,7 @@ async function main() {
 
   // Carry the original posting title and description so "role + hiring" and
   // early-career detection anchor on the real text, not a derived title.
-  ext.roleName = posting.title;
+  ext.roleName = posting.title || "";
   ext.description = posting.description || "";
   if (!ext.company) ext.company = posting.company || "";
 
@@ -352,11 +392,17 @@ async function main() {
   wirePdl(ext);
 
   $("company").value = ext.company || "";
+  $("role").value = ext.roleName || "";
   if (!ext.company) {
     $("company").placeholder = "Not detected — type the company name";
     setStatus("Company not detected on this page — enter it above to enable company-scoped searches.", true);
   }
+  if (!ext.roleName) {
+    $("role").placeholder = "Not detected — type the job title";
+    setStatus("Role not detected on this page — type it above, or use the broad company-wide searches.", true);
+  }
   $("company").addEventListener("change", () => rebuild(ext));
+  $("role").addEventListener("change", () => rebuild(ext));
   $("rebuild").addEventListener("click", () => rebuild(ext));
   $("copy-bool").addEventListener("click", async () => {
     await navigator.clipboard.writeText($("boolean").value);
