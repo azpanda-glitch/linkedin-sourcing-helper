@@ -95,7 +95,14 @@ joined by `" + "`:
 
 ```
 "analyst" + "hiring" + "State Farm"
+"demand intelligence" + "intern" + "hiring" + "Atlassian"
 ```
+
+`"intern"` is added on early-career postings. It has to be explicit: `+` requires
+every term, and `generalizeRole()` strips "Intern" out of the title on purpose
+(nobody writes "Demand Intelligence Intern" in a post), which would otherwise
+leave the query pointing at the full-time req. One bare term, never an OR-group —
+`"intern" + "internship"` would demand both words appear.
 
 Note: LinkedIn's own help pages say the legacy `+` / `-` operators were retired,
 so this is asserted against the docs. It is here because `AND` chains
