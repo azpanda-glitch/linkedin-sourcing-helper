@@ -212,6 +212,14 @@ function renderDetection(q, ext) {
   const bits = [];
   bits.push(q.rolePhrase ? `role: “${q.rolePhrase}”` : "role: not detected — type it above");
   if (ext.description) {
+    // What was actually read out of the body, so "it didn't read the posting" is
+    // answerable at a glance instead of being a guess.
+    if (q.team) bits.push(`team: ${q.team}`);
+    if (q.program) bits.push(`program: ${q.program}`);
+    if (q.keyPhrases?.length) bits.push(`themes: ${q.keyPhrases.slice(0, 3).join(", ")}`);
+    if (!q.team && !q.program && !q.keyPhrases?.length) {
+      bits.push("no team/program/themes found in the description");
+    }
     bits.push(
       q.reportsTo
         ? `reports to: ${q.reportsTo}`

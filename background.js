@@ -4,13 +4,20 @@
 
 const DEFAULT_MODEL = "claude-haiku-4-5-20251001";
 
-const SYSTEM_PROMPT = `You extract structured sourcing signals from a job posting.
+// The reader is a job seeker trying to find the right humans to talk to, so the
+// fields asked for here are the ones that name humans: the team, the program,
+// the reporting line. Titles/skills alone produced generic searches.
+const SYSTEM_PROMPT = `You extract structured signals from a job posting for a job seeker who wants to find the right people to contact.
 Return ONLY minified JSON matching:
-{"titles":[string],"skills":[string],"company":string,"location":string}
+{"titles":[string],"skills":[string],"team":string,"program":string,"reportsTo":string,"keyPhrases":[string],"company":string,"location":string}
 - titles: 3-6 likely job titles a matching candidate would use, including seniority and common synonyms/abbreviations (e.g. "Senior Software Engineer","SDE").
-- skills: up to 10 concrete skills/technologies named or strongly implied.
+- skills: up to 10 concrete skills/technologies/domain competencies named or strongly implied. For non-technical roles use the domain terms the posting actually uses (e.g. "media relations","earned media"), not technologies.
+- team: the specific team/org/group/division the role sits in, exactly as named in the posting (e.g. "Earned Media","Payments Platform"). "" if not stated. Do NOT guess from the title.
+- program: the named early-career/internship program, if any (e.g. "State Farm University Internship Program"). "" otherwise.
+- reportsTo: the job title this role reports to, if the posting states one (e.g. "Director of Analytics"). "" otherwise. Never invent one.
+- keyPhrases: up to 5 short phrases that are the recurring themes of the responsibilities/qualifications, in the posting's own words.
 - company/location: as stated, else "".
-No prose, no markdown fences.`;
+Anything not actually stated in the posting must be "" or []. No prose, no markdown fences.`;
 
 async function extractWithClaude(posting) {
   const { anthropicApiKey, model } = await chrome.storage.sync.get(["anthropicApiKey", "model"]);
@@ -57,6 +64,12 @@ ${(posting.description || "").slice(0, 8000)}`;
     ext: {
       titles: Array.isArray(parsed.titles) ? parsed.titles : [],
       skills: Array.isArray(parsed.skills) ? parsed.skills : [],
+      keyPhrases: Array.isArray(parsed.keyPhrases) ? parsed.keyPhrases : [],
+      team: typeof parsed.team === "string" ? parsed.team.trim() : "",
+      program: typeof parsed.program === "string" ? parsed.program.trim() : "",
+      // Claude's reading of the reporting line, used only when the regex in
+      // lib/query.js finds nothing in the raw text.
+      reportsToHint: typeof parsed.reportsTo === "string" ? parsed.reportsTo.trim() : "",
       company: parsed.company || posting.company || "",
       location: parsed.location || posting.location || "",
       source: "claude"

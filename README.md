@@ -20,11 +20,36 @@ terms in normal search, which is the best a non-partner tool can do.
 - **Hiring manager** — LinkedIn post search and Google X-ray over posts to see
   who's discussing the role's domain.
 
+## What gets read out of the description
+
+The title alone produces generic searches, so the body is mined for the things
+that actually name humans:
+
+| Signal | Where it comes from | What it powers |
+|---|---|---|
+| **Team / org** | "join the **Earned Media** team", "part of the **Story and Franchise Development** group" | people on that team via the company People tab, plus a "team + hiring" posts search |
+| **Program** | "the **State Farm University Internship Program**" | past interns and the recruiters who ran the program |
+| **Reporting line** | "you will report to the **Director of Analytics**" | the one manager search that isn't a guess |
+| **Themes** | recurring bigrams in the qualifications section | "people doing *media relations*" at the company |
+
+Team and program are matched **case-sensitively** on purpose: Title Case is what
+separates a real org name ("the Payments Platform team") from prose ("work with
+the whole team"). Only the leading verb/article is case-relaxed, for
+sentence-initial matches.
+
+Themes are extracted with **no dictionary** — just repeated content bigrams. That
+matters because `SKILL_DICTIONARY` is tech-only, so a marketing or client
+relations posting scored zero on every entry in it and the description
+contributed nothing. Dictionary hits still come first where they apply; themes
+backfill the rest.
+
 ## Extraction modes (⚙︎ Settings)
 - **Local (rule-based)** — default, offline, free. Dictionary + heuristics in
   `lib/extract.js`. Extend `SKILL_DICTIONARY` / `SYNONYMS` to improve results.
 - **Claude API** — paste an Anthropic API key; the service worker calls Claude
-  (default model Haiku 4.5) for higher-quality titles/skills/synonyms. Falls
+  (default model Haiku 4.5), which returns the same fields plus its own reading
+  of team / program / reporting line. The regex reading of the raw text wins when
+  both find a reporting line — a literal match beats a model's summary. Falls
   back to local automatically if the key is missing or a call fails.
 
 ## Install (unpacked)
