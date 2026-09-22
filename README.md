@@ -42,9 +42,35 @@ terms in normal search, which is the best a non-partner tool can do.
 - `popup/` — UI: editable Boolean box + grouped search links.
 - `options/` — settings (mode, API key, model).
 
+## The Boolean operator budget (important)
+
+LinkedIn [caps how many Boolean operators a free account may use in one
+query](https://www.linkedin.com/help/linkedin/answer/a524411), does not publish
+the number, and **when you exceed it the search returns zero results rather than
+an error**. Recruiter / Recruiter Lite are uncapped; Sales Navigator allows 15.
+
+This is the single biggest constraint on query design here, and the reason an
+exhaustive OR-list is worse than useless. Every generated query is therefore kept
+to `OPERATOR_BUDGET` (6) operators, counting each `AND`/`OR`/`NOT` plus each
+opening parenthesis. Term lists in `lib/query.js` are ordered
+most-distinct-first, because only the leading few survive the trim — so if you
+add a term, put it where its value justifies its place.
+
+Google X-ray has no such cap, which is why the wide searches go there and get the
+fuller term lists.
+
+Two related rules the popup follows:
+- `"hiring"` appears only in **Posts** queries. On the People tab every `AND`
+  term must be in the profile, and nobody writes "hiring" in their profile.
+- The operator count is shown live under the Company field, and turns red when a
+  hand-edited query goes over budget.
+
 ## Notes & caveats
 - LinkedIn changes its DOM often; if scraping stops working, update the
-  selectors in `content/scrape.js`.
+  selectors in `scrapePostingInPage()` in `popup/popup.js`.
+- Boolean support per result tab is not documented by LinkedIn. Operators are
+  documented for the main search bar; behavior on the Posts tab is inferred, so
+  prefer the Google X-ray links when a Posts search looks wrong.
 - Storing an API key in `chrome.storage.sync` is convenient but not encrypted;
   use a scoped/limited key.
 - Icons in `icons/` are generated placeholders — replace as desired.

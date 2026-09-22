@@ -1,5 +1,5 @@
 import { extractLocal } from "../lib/extract.js";
-import { buildQueries, isEarlyCareer } from "../lib/query.js";
+import { buildQueries, countOperators, isEarlyCareer } from "../lib/query.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -206,7 +206,10 @@ function renderDetection(q, ext) {
   } else {
     bits.push("description not read — scroll it into view and reopen");
   }
+  bits.push(`${q.operatorCount}/${q.operatorBudget} Boolean operators`);
   $("detect").textContent = bits.join(" · ");
+  // Over the cap LinkedIn returns zero results silently, so say so loudly.
+  $("detect").classList.toggle("error", q.operatorCount > q.operatorBudget);
 }
 
 // Rebuild the persona link lists from whatever is in the Boolean box.
@@ -227,7 +230,8 @@ function rebuild(ext) {
   ext.roleName = $("role").value.trim();
   const edited = $("boolean").value.trim();
   const q = buildQueries(ext);
-  renderDetection(q, ext);
+  // Count what the user actually typed, not what we would have generated.
+  renderDetection(edited ? { ...q, operatorCount: countOperators(edited) } : q, ext);
 
   // The edited Boolean drives only the links flagged `editable` by the query
   // builder; every other search keeps its own purpose-built term list.
