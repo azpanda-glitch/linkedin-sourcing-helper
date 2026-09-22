@@ -122,6 +122,19 @@ function scrapePostingInPage() {
   ]);
   domCompany = clean(domCompany.split("\n")[0]);
 
+  // The company's LinkedIn slug, taken from the company link on the posting.
+  // This is what lets us use linkedin.com/company/<slug>/people/, which scopes
+  // to the company by URL instead of hoping a keyword matches profile text.
+  let companySlug = "";
+  for (const a of document.querySelectorAll('a[href*="/company/"]')) {
+    const m = (a.getAttribute("href") || "").match(/\/company\/([^/?#]+)/);
+    // Skip LinkedIn's own marketing/help links, which also live under /company/.
+    if (m && !/^(linkedin|admin|setup)$/i.test(m[1])) {
+      companySlug = m[1];
+      break;
+    }
+  }
+
   const domLocation = pick([
     ".job-details-jobs-unified-top-card__primary-description-container",
     ".jobs-unified-top-card__primary-description",
@@ -169,6 +182,7 @@ function scrapePostingInPage() {
   return {
     title,
     company,
+    companySlug,
     location: jobLocation,
     description,
     url: window.location.href,
@@ -206,9 +220,13 @@ function renderDetection(q, ext) {
   } else {
     bits.push("description not read — scroll it into view and reopen");
   }
-  bits.push(`${q.operatorCount}/${q.operatorBudget} Boolean operators`);
+  bits.push(ext.companySlug ? "company page found" : "no company page — using keyword search");
+  // LinkedIn links use plain keywords now. Operators are only worth mentioning
+  // if the user typed some, since LinkedIn may silently drop the whole query.
+  if (q.operatorCount > 0) {
+    bits.push(`${q.operatorCount} Boolean operators — LinkedIn may ignore these`);
+  }
   $("detect").textContent = bits.join(" · ");
-  // Over the cap LinkedIn returns zero results silently, so say so loudly.
   $("detect").classList.toggle("error", q.operatorCount > q.operatorBudget);
 }
 
@@ -384,6 +402,7 @@ async function main() {
   // early-career detection anchor on the real text, not a derived title.
   ext.roleName = posting.title || "";
   ext.description = posting.description || "";
+  ext.companySlug = posting.companySlug || "";
   if (!ext.company) ext.company = posting.company || "";
 
   $("src-badge").textContent = ext.source;
