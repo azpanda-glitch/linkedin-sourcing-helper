@@ -102,14 +102,31 @@ function scrapePostingInPage() {
   // Title selectors are scoped to the job top card. A bare "h1" is deliberately
   // NOT a fallback: on /jobs/collections and /jobs/search pages the page h1 is
   // the company or a generic heading, which silently became the "role".
+  // A bare "h1" is deliberately NOT a fallback, but an h1 *scoped to a top-card
+  // container* is safe and is what catches layouts we don't have a class for —
+  // without it, title has no generic fallback at all while company has two
+  // (the a[href*="/company/"] wildcard and the URL slug), which is why a
+  // standalone posting could report the company correctly and no role.
   const domTitle = pick([
     ".job-details-jobs-unified-top-card__job-title h1",
     ".job-details-jobs-unified-top-card__job-title",
     ".jobs-unified-top-card__job-title",
     ".jobs-details-top-card__job-title",
+    // Guest / standalone (not-logged-in) layout, newest first.
+    ".top-card-layout__title",
+    "h1.top-card-layout__title",
     ".topcard__title",
     ".jobs-search__job-details h1",
-    "h1.t-24"
+    "h1.t-24",
+    // Scoped last-resort: an h1 inside anything that looks like a job top card.
+    ".top-card-layout h1",
+    ".topcard h1",
+    ".job-details-jobs-unified-top-card h1",
+    ".jobs-unified-top-card h1",
+    // "main h1" is only safe on a standalone /jobs/view/ page, where the page's
+    // single heading IS the role. On /jobs/search and /jobs/collections it is a
+    // generic heading ("Recommended for you") or the company.
+    ...(slug ? ["main h1"] : [])
   ]);
 
   let domCompany = pick([
@@ -187,7 +204,16 @@ function scrapePostingInPage() {
     description,
     url: window.location.href,
     // which source won — surfaced in the popup so failures are diagnosable
-    companySource: ld.company ? "json-ld" : ogCompany ? "og:title" : domCompany ? "dom" : slugCompany ? "url" : "none"
+    companySource: ld.company ? "json-ld" : ogCompany ? "og:title" : domCompany ? "dom" : slugCompany ? "url" : "none",
+    titleSource: !title
+      ? "none"
+      : ld.title
+        ? "json-ld"
+        : ogTitle
+          ? "og:title"
+          : domTitle
+            ? "dom"
+            : "none"
   };
 }
 
@@ -220,7 +246,9 @@ function renderDetection(q, ext) {
         : `role: “${q.rolePhrase}”`
     );
   } else {
-    bits.push("role: not detected — type it above");
+    // Naming the source that failed turns "it doesn't work on this page" into a
+    // reportable fact: "none" means all four sources missed on this layout.
+    bits.push(`role: not detected (source: ${ext.titleSource || "none"}) — type it above`);
   }
   if (ext.description) {
     // What was actually read out of the body, so "it didn't read the posting" is
