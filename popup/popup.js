@@ -41,6 +41,10 @@ function scrapePostingInPage() {
   const meta = (prop) =>
     document.querySelector(`meta[property="${prop}"], meta[name="${prop}"]`)?.content?.trim() || "";
   const clean = (s) => String(s || "").replace(/\s+/g, " ").trim();
+  // True only on a single-posting page. /jobs/search and /jobs/collections show
+  // a list, so their page heading and document.title describe the list, not the
+  // selected job — the loosest title sources are gated on this.
+  const isJobView = /\/jobs\/view\//.test(window.location.pathname);
 
   // --- Source 1: JSON-LD JobPosting (most reliable; survives CSS churn) -----
   let ld = {};
@@ -87,6 +91,25 @@ function scrapePostingInPage() {
       break;
     }
   }
+  // The "<Company> hiring <Role>" shape is the guest/crawler title. While logged
+  // in, LinkedIn uses "<Role> | <Company> | LinkedIn" — sometimes prefixed with
+  // an unread count, "(3) Data Scientist 1 | PayPal | LinkedIn". That title is
+  // present on every logged-in posting, so it is a better fallback than a DOM
+  // class name; without it a logged-in /jobs/view page had no working source
+  // once JSON-LD was absent, which reads as "the role isn't detected".
+  if (!ogTitle && isJobView) {
+    const parts = clean(document.title)
+      .replace(/^\(\d+\+?\)\s*/, "")
+      .split("|")
+      .map(clean)
+      .filter((p) => p && !/^linkedin$/i.test(p));
+    // Two or more segments means it really is "Role | Company", not a bare
+    // page name like "Jobs" that would become a fake role.
+    if (parts.length >= 2) {
+      ogTitle = parts[0];
+      ogCompany = ogCompany || parts[1];
+    }
+  }
 
   // --- Source 3: URL slug -> /jobs/view/<role>-at-<company>-<id> ------------
   let slugCompany = "";
@@ -126,7 +149,7 @@ function scrapePostingInPage() {
     // "main h1" is only safe on a standalone /jobs/view/ page, where the page's
     // single heading IS the role. On /jobs/search and /jobs/collections it is a
     // generic heading ("Recommended for you") or the company.
-    ...(slug ? ["main h1"] : [])
+    ...(isJobView ? ["main h1"] : [])
   ]);
 
   let domCompany = pick([
