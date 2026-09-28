@@ -5,3 +5,10 @@
 
 # nothing secret is committed — API keys are entered at runtime via the
 # options page and stored in chrome.storage, never in the repo
+
+# Python
+__pycache__/
+*.pyc
+
+# Local screenshots
+Screenshot*.png
