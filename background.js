@@ -1,6 +1,8 @@
-// Service worker: proxies Claude extraction so the API key and CORS handling
-// stay out of page context. Falls back to null on any failure (popup then
-// uses local extraction).
+// Service worker: proxies Claude extraction, People Data Labs search, and the
+// email waterfall so API keys and CORS handling stay out of page context.
+// Claude falls back to null on any failure (popup then uses local extraction).
+
+import { findEmail, DEFAULT_STEPS } from "./lib/email.js";
 
 const DEFAULT_MODEL = "claude-haiku-4-5-20251001";
 
@@ -140,12 +142,79 @@ async function pdlSearch(params) {
     title: p.job_title || "",
     company: p.job_company_name || "",
     location: p.location_name || "",
-    linkedin: p.linkedin_url ? (/^https?:\/\//.test(p.linkedin_url) ? p.linkedin_url : `https://www.${p.linkedin_url}`) : ""
+    linkedin: p.linkedin_url ? (/^https?:\/\//.test(p.linkedin_url) ? p.linkedin_url : `https://www.${p.linkedin_url}`) : "",
+    // Paid plans return the address; free plans return `true`. The waterfall
+    // only uses it when it's a string.
+    workEmail: typeof p.work_email === "string" ? p.work_email : "",
+    domain: p.job_company_website || ""
   }));
   return { ok: true, people, total: data.total ?? people.length };
 }
 
+// ---- Email waterfall -----------------------------------------------------------
+
+async function http(url, opts = {}) {
+  // A hung provider would otherwise stall every step behind it.
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 20000);
+  try {
+    const resp = await fetch(url, { ...opts, signal: ctrl.signal });
+    const json = await resp.json().catch(() => null);
+    return { status: resp.status, json };
+  } catch (e) {
+    return { status: 0, json: { error: e.name === "AbortError" ? "timed out" : String(e) } };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function cacheKey(person) {
+  return (person.linkedin || `${person.name}@${person.domain || person.company}`).toLowerCase().trim();
+}
+
+async function emailLookup(person, force) {
+  const sync = await chrome.storage.sync.get([
+    "hunterApiKey", "pdlApiKey", "zerobounceApiKey", "millionverifierApiKey",
+    "emailVerifier", "emailSteps", "maxVerifications", "maxGuesses"
+  ]);
+  const local = await chrome.storage.local.get(["emailCache", "emailPatterns", "catchAllDomains"]);
+  const cache = local.emailCache || {};
+  const key = cacheKey(person);
+
+  // Only confident results are cached; a miss might succeed after adding a key.
+  if (!force && cache[key]) return { ok: true, result: { ...cache[key], cached: true } };
+
+  const cfg = {
+    keys: {
+      hunter: sync.hunterApiKey || "",
+      pdl: sync.pdlApiKey || "",
+      zerobounce: sync.zerobounceApiKey || "",
+      millionverifier: sync.millionverifierApiKey || ""
+    },
+    verifier: sync.emailVerifier || "auto",
+    steps: Array.isArray(sync.emailSteps) ? sync.emailSteps : DEFAULT_STEPS,
+    maxVerifications: Number(sync.maxVerifications) || 4,
+    maxGuesses: Number(sync.maxGuesses) || 3
+  };
+  const deps = {
+    http,
+    patterns: local.emailPatterns || {},
+    catchAll: local.catchAllDomains || {}
+  };
+
+  const result = await findEmail(person, cfg, deps);
+  if (result.status === "valid" || result.status === "risky") cache[key] = result;
+  await chrome.storage.local.set({ emailCache: cache, emailPatterns: deps.patterns, catchAllDomains: deps.catchAll });
+  return { ok: true, result };
+}
+
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+  if (msg?.type === "FIND_EMAIL") {
+    emailLookup(msg.person, msg.force)
+      .then(sendResponse)
+      .catch((e) => sendResponse({ ok: false, error: "exception", detail: String(e) }));
+    return true;
+  }
   if (msg?.type === "PDL_SEARCH") {
     pdlSearch(msg.params)
       .then(sendResponse)

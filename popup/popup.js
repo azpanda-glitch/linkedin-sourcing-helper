@@ -1,5 +1,6 @@
 import { extractLocal } from "../lib/extract.js";
 import { buildQueries, countOperators, isEarlyCareer } from "../lib/query.js";
+import { displayName, normalizeDomain, contactsToCsv, contactsToTsv } from "../lib/email.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -336,13 +337,206 @@ function rebuild(ext) {
   renderLinks("sourcer-links", q.sourcer);
 }
 
-function renderPeople(people) {
+// ---- Email waterfall ---------------------------------------------------------
+
+const STATUS_TEXT = {
+  valid: "Verified",
+  risky: "Risky: catch-all domain",
+  unknown: "Unverified",
+  invalid: "Invalid",
+  not_found: "Not found"
+};
+
+// One lookup at a time: the background shares its caches across lookups, and
+// providers rate-limit bursts.
+let emailQueue = Promise.resolve();
+function lookupEmail(person) {
+  const run = emailQueue.then(() => sendToBg({ type: "FIND_EMAIL", person }));
+  emailQueue = run.catch(() => {});
+  return run;
+}
+
+function copyButton(text) {
+  const b = document.createElement("button");
+  b.className = "secondary small";
+  b.textContent = "Copy";
+  b.addEventListener("click", async () => {
+    await navigator.clipboard.writeText(text);
+    b.textContent = "Copied";
+    setTimeout(() => (b.textContent = "Copy"), 1200);
+  });
+  return b;
+}
+
+function renderEmailResult(container, res) {
+  container.innerHTML = "";
+  if (!res?.ok) {
+    container.textContent = `Lookup failed: ${res?.detail || res?.error || "unknown error"}`;
+    return;
+  }
+  const r = res.result;
+  const row = document.createElement("div");
+  row.className = "email-row";
+  if (r.email) {
+    const e = document.createElement("span");
+    e.className = "email";
+    e.textContent = r.email;
+    row.append(e, copyButton(r.email));
+  }
+  const chip = document.createElement("span");
+  chip.className = `chip ${r.status}`;
+  chip.textContent = STATUS_TEXT[r.status] + (r.cached ? " (saved earlier)" : "");
+  row.appendChild(chip);
+  container.appendChild(row);
+
+  // Show the steps so "not found" says why: no key, no domain, no match.
+  if (r.trace?.length) {
+    const d = document.createElement("details");
+    d.className = "trace";
+    const s = document.createElement("summary");
+    s.textContent = "How it was found";
+    const ul = document.createElement("ul");
+    for (const line of r.trace) {
+      const li = document.createElement("li");
+      li.textContent = line;
+      ul.appendChild(li);
+    }
+    d.append(s, ul);
+    container.appendChild(d);
+  }
+}
+
+// ---- Saved contacts ------------------------------------------------------------
+
+async function loadContacts() {
+  const { contacts } = await chrome.storage.local.get(["contacts"]);
+  return Array.isArray(contacts) ? contacts : [];
+}
+
+async function storeContacts(list) {
+  await chrome.storage.local.set({ contacts: list });
+  renderContacts(list);
+}
+
+async function saveContact(person, result, job) {
+  if (!result?.email) return;
+  const { first, last } = displayName(person.name);
+  const contact = {
+    first,
+    last,
+    email: result.email,
+    status: result.status,
+    title: person.title || "",
+    company: person.company || "",
+    linkedin: person.linkedin || "",
+    job: job.title || "",
+    jobUrl: job.url || "",
+    source: result.source || "",
+    foundOn: new Date().toISOString().slice(0, 10)
+  };
+  const list = await loadContacts();
+  const i = list.findIndex((c) => c.email === contact.email || (contact.linkedin && c.linkedin === contact.linkedin));
+  if (i >= 0) list[i] = { ...list[i], ...contact };
+  else list.push(contact);
+  await storeContacts(list);
+}
+
+function renderContacts(list) {
+  $("contact-count").textContent = String(list.length);
+  const ul = $("contacts");
+  ul.innerHTML = "";
+  list.forEach((c, i) => {
+    const li = document.createElement("li");
+    const who = document.createElement("span");
+    who.className = "who";
+    who.textContent = `${[c.first, c.last].filter(Boolean).join(" ")}: ${c.email}`;
+    who.title = [c.title, c.company, c.job].filter(Boolean).join(" · ");
+    const chip = document.createElement("span");
+    chip.className = `chip ${c.status}`;
+    chip.textContent = c.status === "valid" ? "✓" : c.status;
+    const remove = document.createElement("button");
+    remove.className = "remove";
+    remove.title = "Remove";
+    remove.textContent = "×";
+    remove.addEventListener("click", async () => {
+      const current = await loadContacts();
+      current.splice(i, 1);
+      await storeContacts(current);
+    });
+    li.append(who, chip, remove);
+    ul.appendChild(li);
+  });
+}
+
+function flash(text) {
+  $("contacts-status").textContent = text;
+  setTimeout(() => ($("contacts-status").textContent = ""), 2500);
+}
+
+function wireContacts() {
+  $("copy-sheets").addEventListener("click", async () => {
+    const list = await loadContacts();
+    if (!list.length) return flash("No contacts yet.");
+    await navigator.clipboard.writeText(contactsToTsv(list));
+    flash(`Copied ${list.length}. Paste into cell A1 of a Google Sheet.`);
+  });
+  $("export-csv").addEventListener("click", async () => {
+    const list = await loadContacts();
+    if (!list.length) return flash("No contacts yet.");
+    const url = URL.createObjectURL(new Blob([contactsToCsv(list)], { type: "text/csv" }));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `contacts-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+  });
+  $("clear-contacts").addEventListener("click", async () => {
+    if (!confirm("Remove all saved contacts? Export them first if you need them.")) return;
+    await storeContacts([]);
+  });
+  loadContacts().then(renderContacts);
+}
+
+function wireLookup(ext, job) {
+  $("lookup-go").addEventListener("click", async () => {
+    const out = $("lookup-result");
+    const name = $("lookup-name").value.trim();
+    if (!name) {
+      out.textContent = "Enter a name first.";
+      return;
+    }
+    const domainText = $("lookup-domain").value.trim();
+    if (domainText && !normalizeDomain(domainText)) {
+      out.textContent = "That domain doesn't look right. Try something like stripe.com.";
+      return;
+    }
+    const person = {
+      name,
+      company: $("company").value.trim() || ext.company,
+      domain: domainText,
+      linkedin: $("lookup-linkedin").value.trim()
+    };
+    $("lookup-go").disabled = true;
+    out.textContent = "Searching…";
+    const res = await lookupEmail(person);
+    $("lookup-go").disabled = false;
+    renderEmailResult(out, res);
+    if (res?.ok) {
+      if (!domainText && res.result.domain) $("lookup-domain").value = res.result.domain;
+      await saveContact(person, res.result, job);
+    }
+  });
+}
+
+function renderPeople(people, ext, job) {
   const ul = $("pdl-results");
   ul.innerHTML = "";
+  $("find-all-emails").hidden = !people.length;
   if (!people.length) {
     $("pdl-status").textContent = "No matches returned.";
     return;
   }
+  const runners = [];
   for (const p of people) {
     const li = document.createElement("li");
     const name = document.createElement("div");
@@ -360,11 +554,49 @@ function renderPeople(people) {
       a.textContent = "LinkedIn profile ↗";
       li.appendChild(a);
     }
+
+    const find = document.createElement("button");
+    find.className = "secondary small";
+    find.textContent = "Find email";
+    const out = document.createElement("div");
+    const person = {
+      name: p.name,
+      title: p.title,
+      company: p.company || ext.company,
+      domain: p.domain,
+      linkedin: p.linkedin,
+      workEmail: p.workEmail
+    };
+    const run = async () => {
+      find.disabled = true;
+      out.textContent = "Searching…";
+      const res = await lookupEmail(person);
+      renderEmailResult(out, res);
+      find.disabled = false;
+      find.textContent = "Retry";
+      if (res?.ok) await saveContact(person, res.result, job);
+    };
+    find.addEventListener("click", run);
+    runners.push(run);
+    // PDL withholds names on some plans; there's nothing to build an address from.
+    if (p.name === "(name withheld)") find.disabled = true;
+    li.append(find, out);
     ul.appendChild(li);
   }
+
+  const all = $("find-all-emails");
+  all.onclick = async () => {
+    all.disabled = true;
+    for (let i = 0; i < runners.length; i++) {
+      all.textContent = `Finding ${i + 1} of ${runners.length}…`;
+      await runners[i]();
+    }
+    all.textContent = "Find all emails";
+    all.disabled = false;
+  };
 }
 
-function wirePdl(ext) {
+function wirePdl(ext, job) {
   const run = async (mode, label) => {
     const status = $("pdl-status");
     $("pdl-results").innerHTML = "";
@@ -394,7 +626,7 @@ function wirePdl(ext) {
       return;
     }
     status.textContent = `${res.people.length} shown (of ~${res.total}).`;
-    renderPeople(res.people);
+    renderPeople(res.people, ext, job);
   };
 
   const early = isEarlyCareer(ext);
@@ -482,7 +714,10 @@ async function main() {
   $("posting").hidden = false;
   renderFromExt(ext);
 
-  wirePdl(ext);
+  const job = { title: posting.title || "", url: posting.url || tab.url || "" };
+  wirePdl(ext, job);
+  wireLookup(ext, job);
+  wireContacts();
 
   $("company").value = ext.company || "";
   $("role").value = ext.roleName || "";

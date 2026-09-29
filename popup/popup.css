@@ -52,3 +52,20 @@ button.secondary { background: #fff; color: var(--accent); }
 .results .name { font-weight: 600; }
 .results .role { color: var(--muted); font-size: 12px; }
 .results a { color: var(--accent); font-size: 12px; text-decoration: none; }
+.results .email-row { display: flex; align-items: center; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
+.email { font-family: ui-monospace, Menlo, monospace; font-size: 12px; user-select: all; word-break: break-all; }
+.chip { font-size: 11px; padding: 1px 6px; border-radius: 8px; }
+.chip.valid { background: #dcfae6; color: #067647; }
+.chip.risky { background: #fef0c7; color: #93370d; }
+.chip.unknown { background: #f2f4f7; color: #475467; }
+.chip.not_found, .chip.invalid { background: #fee4e2; color: #b42318; }
+button.small { padding: 2px 8px; font-size: 11px; }
+button:disabled { opacity: .5; cursor: default; }
+details.trace { font-size: 11px; color: var(--muted); margin-top: 4px; width: 100%; }
+details.trace li { margin: 2px 0; }
+#find-all-emails { margin: 4px 0; }
+#lookup-result { margin: 6px 0; }
+.contacts { list-style: none; margin: 0; padding: 0; max-height: 180px; overflow-y: auto; }
+.contacts li { display: flex; align-items: center; gap: 6px; padding: 4px 0; border-bottom: 1px solid var(--border); font-size: 12px; }
+.contacts .who { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.contacts .remove { background: none; border: none; color: var(--muted); padding: 0 4px; font-size: 14px; }

@@ -55,8 +55,40 @@
     <p class="muted">Enables the "Find people at this company" buttons in the popup. Get a key at <code>dashboard.peopledatalabs.com</code> (free tier available). Person Search may require a paid/sandbox plan on some accounts — the popup shows the API error if a call is rejected.</p>
   </fieldset>
 
+  <fieldset>
+    <legend>Email finder (waterfall)</legend>
+    <p class="muted">Tries each source in order and stops at the first address a verifier confirms. Every key is optional: the more you add, the more emails it finds. All have free tiers.</p>
+    <label>Hunter API key <span class="muted">(finder, and a verifier). hunter.io → API</span>
+      <input type="password" id="hunterKey" autocomplete="off" />
+    </label>
+    <label>MillionVerifier API key <span class="muted">(verifier). millionverifier.com → API</span>
+      <input type="password" id="mvKey" autocomplete="off" />
+    </label>
+    <label>ZeroBounce API key <span class="muted">(verifier). zerobounce.net → API</span>
+      <input type="password" id="zbKey" autocomplete="off" />
+    </label>
+    <label>Verifier
+      <select id="verifier">
+        <option value="auto">Auto: first one with a key (MillionVerifier, ZeroBounce, Hunter)</option>
+        <option value="millionverifier">MillionVerifier</option>
+        <option value="zerobounce">ZeroBounce</option>
+        <option value="hunter">Hunter</option>
+      </select>
+    </label>
+    <p><strong>Steps</strong> <span class="muted">(run top to bottom; the People Data Labs key above is also used here)</span></p>
+    <div id="steps"></div>
+    <label>Max verifications per person
+      <input type="text" id="maxVerifications" inputmode="numeric" />
+    </label>
+    <label>Max format guesses per person
+      <input type="text" id="maxGuesses" inputmode="numeric" />
+    </label>
+    <p class="muted">Each verification and finder lookup uses one credit from that provider. Found emails and each company's email format are remembered on this device, so repeat lookups are free.</p>
+    <button id="clear-cache" type="button">Clear remembered emails and formats</button>
+  </fieldset>
+
   <button id="save">Save</button><span id="saved"></span>
 
-  <script src="options.js"></script>
+  <script type="module" src="options.js"></script>
 </body>
 </html>

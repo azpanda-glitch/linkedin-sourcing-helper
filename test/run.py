@@ -253,7 +253,12 @@ def main():
     print("\n%d/%d passed" % (len(CASES) - len(failures), len(CASES)))
     if failures:
         print("failed: " + ", ".join(failures))
-    return 1 if failures else 0
+
+    print()
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import email_test
+    email_failed = email_test.main()
+    return 1 if failures or email_failed else 0
 
 
 if __name__ == "__main__":

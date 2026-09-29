@@ -45,7 +45,27 @@
       <button id="find-peers" class="secondary">Find people in this role</button>
     </div>
     <div id="pdl-status" class="muted"></div>
+    <button id="find-all-emails" class="secondary" hidden>Find all emails</button>
     <ul id="pdl-results" class="results"></ul>
+
+    <h2>Find an email</h2>
+    <label class="field-label" for="lookup-name">Name</label>
+    <input id="lookup-name" type="text" spellcheck="false" placeholder="e.g. Jane Doe" />
+    <label class="field-label" for="lookup-domain">Company email domain <span class="badge">optional</span></label>
+    <input id="lookup-domain" type="text" spellcheck="false" placeholder="e.g. stripe.com" />
+    <label class="field-label" for="lookup-linkedin">LinkedIn URL <span class="badge">optional</span></label>
+    <input id="lookup-linkedin" type="text" spellcheck="false" placeholder="linkedin.com/in/…" />
+    <div class="row"><button id="lookup-go">Find email</button></div>
+    <div id="lookup-result"></div>
+
+    <h2>Saved contacts <span id="contact-count" class="badge">0</span></h2>
+    <ul id="contacts" class="contacts"></ul>
+    <div class="row">
+      <button id="copy-sheets" class="secondary">Copy for Sheets</button>
+      <button id="export-csv" class="secondary">Export CSV</button>
+      <button id="clear-contacts" class="secondary">Clear</button>
+    </div>
+    <div id="contacts-status" class="muted"></div>
   </section>
 
   <script type="module" src="popup.js"></script>

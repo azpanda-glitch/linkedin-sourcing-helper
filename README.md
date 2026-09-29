@@ -43,6 +43,33 @@ Everything above works with no setup. Two optional keys, added under the ⚙︎ 
 |---|---|---|
 | [Anthropic (Claude)](https://console.anthropic.com/) | Reads the posting with AI instead of rules, so it catches the team, program, and reporting line more reliably | Pay per use; well under a cent per posting on Haiku 4.5 |
 | [People Data Labs](https://dashboard.peopledatalabs.com/) | "Find people at this company" buttons that return actual people | Free tier available; some plans don't include Person Search |
+| [Hunter](https://hunter.io) | Email finder (and can double as the verifier) | Free tier available |
+| [MillionVerifier](https://www.millionverifier.com) or [ZeroBounce](https://www.zerobounce.net) | Checks that an address really exists before you send to it | Free credits on signup; pay as you go after |
+
+## Find emails (waterfall)
+
+Next to every People Data Labs result there's a **Find email** button (or **Find all emails** for the whole list). For someone you found through a LinkedIn search link instead, use **Find an email**: type their name, and add the company's email domain (like `stripe.com`) if you know it.
+
+It tries sources in order and stops at the first address a verifier confirms:
+
+1. The email already on the People Data Labs result (paid PDL plans only)
+2. The company's email format, if it has already confirmed someone there (e.g. `first.last@`)
+3. Hunter's email finder
+4. People Data Labs enrich
+5. Guessing the most common formats and verifying each one
+
+Every result is labeled:
+
+- **Verified:** the verifier confirmed the mailbox exists.
+- **Risky: catch-all domain:** the company's mail server accepts *every* address, so no one can confirm it. This is the most common format and usually right, but may bounce.
+- **Unverified:** found, but not checked (no verifier key, or the per-person limit was hit).
+- **Not found:** open **How it was found** to see why (usually a missing key or no company domain).
+
+**Keeping credit use low:** A verifier key is what makes this worthwhile, since without one nothing gets confirmed. Found emails, each company's format, and catch-all domains are remembered on your device, so the second person at a company usually costs one verification instead of a finder lookup. You can change the step order, turn steps off, and set per-person limits under ⚙︎ settings.
+
+**Saved contacts:** Every email found is added to **Saved contacts**. **Copy for Sheets** puts them on your clipboard to paste into a Google Sheet. **Export CSV** downloads a file. The columns (First Name, Last Name, Email, Title, Company, Job…) line up with Streak and other mail-merge tools.
+
+Please be a good sender: keep cold emails personal and few, and stop when someone asks you to.
 
 ## Updating
 
@@ -55,6 +82,8 @@ Everything above works with no setup. Two optional keys, added under the ⚙︎ 
 - With no keys set, nothing leaves your browser.
 - **Claude mode:** when you open the popup, the posting text is sent to `api.anthropic.com`.
 - **People Data Labs:** when you click a "Find people" button, the company name and search terms are sent to `api.peopledatalabs.com`.
+- **Find email:** the person's name, company or domain, and LinkedIn URL are sent to the finders you've added keys for (Hunter, People Data Labs), and candidate addresses are sent to your verifier (MillionVerifier, ZeroBounce, or Hunter). Only when you click a Find email button.
+- Saved contacts and remembered emails stay in Chrome's local extension storage on your device. Clear them from the popup and ⚙︎ settings.
 - Keys are stored in Chrome's extension storage on your device (`chrome.storage.sync`, not encrypted). Use a key with a spending limit.
 - No analytics, and no server of its own.
 
@@ -67,7 +96,7 @@ Everything above works with no setup. Two optional keys, added under the ⚙︎ 
 ## Feedback
 
 Found a bug or have an idea? [Open an issue](https://github.com/azpanda-glitch/linkedin-sourcing-helper/issues).
-To work on the code, see **How it works** below. Run the tests with `python3 test/run.py`.
+To work on the code, see **How it works** below. Run the tests with `python3 test/run.py` (it runs the email waterfall checks in `test/email_test.py` too).
 
 ---
 
@@ -123,7 +152,8 @@ backfill the rest.
 - `content/scrape.js` — reads the visible posting's title/company/location/description.
 - `lib/extract.js` — local rule-based extraction.
 - `lib/query.js` — Boolean strings + LinkedIn/Google X-ray URL builders.
-- `background.js` — Claude API proxy (keeps key/CORS out of page context).
+- `lib/email.js` — the email waterfall, verifier adapters, and CSV/Sheets export.
+- `background.js` — proxies Claude, People Data Labs, and the email providers (keeps keys/CORS out of page context), and caches email results.
 - `popup/` — UI: editable Boolean box + grouped search links.
 - `options/` — settings (mode, API key, model).
 

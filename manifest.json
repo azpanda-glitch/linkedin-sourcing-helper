@@ -1,13 +1,16 @@
 {
   "manifest_version": 3,
   "name": "Sourcing Helper — Boolean & X-ray Builder",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Reads the job posting you're viewing and builds Boolean + X-ray search links to source candidates and related posts.",
   "permissions": ["activeTab", "scripting", "storage"],
   "host_permissions": [
     "https://www.linkedin.com/*",
     "https://api.anthropic.com/*",
-    "https://api.peopledatalabs.com/*"
+    "https://api.peopledatalabs.com/*",
+    "https://api.hunter.io/*",
+    "https://api.zerobounce.net/*",
+    "https://api.millionverifier.com/*"
   ],
   "action": {
     "default_title": "Sourcing Helper",
